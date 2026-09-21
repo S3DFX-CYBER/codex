@@ -6,6 +6,7 @@ on:
 jobs:
   poc:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -14,6 +15,14 @@ jobs:
           rustup toolchain install 1.95.0 --profile minimal
           rustup default 1.95.0
 
-      - name: Run PoC integration test
+      - name: Run policy-level PoC test (execpolicy crate)
         working-directory: codex-rs
         run: cargo test -p codex-execpolicy --test basename_approval_inheritance -- --nocapture
+
+      - name: Build sandbox helper binary for end-to-end test
+        working-directory: codex-rs
+        run: cargo build -p codex-shell-escalation --bin codex-execve-wrapper
+
+      - name: Run end-to-end PoC test (core session, real sandbox)
+        working-directory: codex-rs
+        run: cargo test -p codex-core --test exec_policy_basename_poc -- --nocapture
