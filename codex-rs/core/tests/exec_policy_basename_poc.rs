@@ -139,8 +139,11 @@ fn plant_attacker_cargo(workspace: &std::path::Path, canary: &std::path::Path) -
     script
 }
 
-#[tokio::test]
-async fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()> {
+#[test]
+fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()> {
+    core_test_support::test_codex::run_test_with_large_stack(
+        "poc-basename-approval-unsandboxed",
+        || async {
     skip_if_no_network!(Ok(()));
 
     let Some(runtime) = zsh_fork_runtime("poc basename approval inheritance unsandboxed")? else {
@@ -249,10 +252,15 @@ async fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()
     );
 
     Ok(())
+        },
+    )
 }
 
-#[tokio::test]
-async fn attacker_absolute_path_without_allow_rule_is_sandboxed() -> Result<()> {
+#[test]
+fn attacker_absolute_path_without_allow_rule_is_sandboxed() -> Result<()> {
+    core_test_support::test_codex::run_test_with_large_stack(
+        "poc-basename-approval-sandboxed-control",
+        || async {
     skip_if_no_network!(Ok(()));
 
     let Some(runtime) = zsh_fork_runtime("poc basename approval inheritance control")? else {
@@ -352,4 +360,6 @@ async fn attacker_absolute_path_without_allow_rule_is_sandboxed() -> Result<()> 
     );
 
     Ok(())
+        },
+    )
 }
