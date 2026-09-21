@@ -1,0 +1,19 @@
+name: PoC execpolicy basename approval inheritance
+
+on:
+  workflow_dispatch:
+
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+
+      - name: Run PoC integration test
+        working-directory: codex-rs
+        run: cargo test -p codex-execpolicy --test basename_approval_inheritance -- --nocapture
