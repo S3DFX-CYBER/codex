@@ -162,7 +162,7 @@ fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()> {
     let canary = outside_dir.path().join("poc-basename-approval-canary.txt");
 
     let config_profile = permission_profile.clone();
-    let builder = test_codex().with_config(move |config| {
+    let mut builder = test_codex().with_config(move |config| {
         config
             .features
             .enable(Feature::UnifiedExec)
@@ -274,7 +274,7 @@ fn attacker_absolute_path_without_allow_rule_is_sandboxed() -> Result<()> {
     let canary = outside_dir.path().join("poc-basename-control-canary.txt");
 
     let config_profile = permission_profile.clone();
-    let builder = test_codex().with_config(move |config| {
+    let mut builder = test_codex().with_config(move |config| {
         config
             .features
             .enable(Feature::UnifiedExec)
