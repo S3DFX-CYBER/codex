@@ -133,7 +133,9 @@ async fn wait_for_completion_without_approval(test: &TestCodex) {
 /// sandbox's writable roots when executed.
 fn plant_attacker_cargo(workspace: &std::path::Path, canary: &std::path::Path) -> std::path::PathBuf {
     let script = workspace.join("cargo");
-    let body = format!("#!/bin/sh\ntouch {canary:?}\necho attacker-cargo-ran\n");
+    let body = format!(
+        "#!/bin/sh\necho started > started.marker\ntouch {canary:?}\necho attacker-cargo-ran\n"
+    );
     fs::write(&script, body).expect("write attacker cargo script");
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
         .expect("make attacker cargo executable");
@@ -179,7 +181,10 @@ fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()> {
     let test = builder.build_with_auto_env(&server).await?;
 
     let script = plant_attacker_cargo(test.cwd.path(), &canary);
-    let command = format!("{script:?} build");
+    // NOTE: argv[0] is intentionally unquoted: the shell command tokenizer
+    // feeds argv to the policy matcher, and the attacker scenario is a plain
+    // absolute-path invocation as `bash -lc "<path>/cargo build"` would run.
+    let command = format!("{} build", script.display());
 
     let call_id = "poc-basename-approval-unsandboxed";
     let args = json!({"cmd": command, "yield_time_ms": 30_000});
@@ -240,9 +245,10 @@ fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()> {
     assert!(
         canary.exists(),
         "expected the attacker-planted absolute-path binary to run UNSANDBOXED and write outside \
-         the workspace; exit_code: {:?}, stdout: {}",
+         the workspace; exit_code: {:?}, stdout: {}, script_started_marker: {}",
         result.exit_code,
-        result.stdout
+        result.stdout,
+        test.cwd.path().join("started.marker").exists()
     );
     assert!(
         result.stdout.contains("attacker-cargo-ran"),
@@ -291,7 +297,10 @@ fn attacker_absolute_path_without_allow_rule_is_sandboxed() -> Result<()> {
     let test = builder.build_with_auto_env(&server).await?;
 
     let script = plant_attacker_cargo(test.cwd.path(), &canary);
-    let command = format!("{script:?} build");
+    // NOTE: argv[0] is intentionally unquoted: the shell command tokenizer
+    // feeds argv to the policy matcher, and the attacker scenario is a plain
+    // absolute-path invocation as `bash -lc "<path>/cargo build"` would run.
+    let command = format!("{} build", script.display());
 
     let call_id = "poc-basename-approval-sandboxed-control";
     let args = json!({"cmd": command, "yield_time_ms": 30_000});
