@@ -54,7 +54,6 @@ use codex_core::TurnInputRequest;
 use codex_protocol::config_types::CollaborationMode;
 use codex_protocol::config_types::ModeKind;
 use codex_protocol::config_types::Settings;
-use codex_protocol::models::PermissionProfile;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::ThreadSettingsOverrides;
@@ -208,25 +207,27 @@ async fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(permission_profile, test.cwd.path());
     test.codex
-        .start_or_steer_turn(TurnInputRequest::user_input(vec![UserInput::Text {
-            text: "run the build".into(),
-            text_elements: Vec::new(),
-        }]))
-        .with_thread_settings(ThreadSettingsOverrides {
-            environments: Some(local_selections(test.config.cwd.clone())),
-            approval_policy: Some(approval_policy),
-            sandbox_policy: Some(sandbox_policy),
-            permission_profile,
-            collaboration_mode: Some(CollaborationMode {
-                mode: ModeKind::Default,
-                settings: Settings {
-                    model: session_model,
-                    reasoning_effort: None,
-                    developer_instructions: None,
-                },
+        .start_or_steer_turn(
+            TurnInputRequest::user_input(vec![UserInput::Text {
+                text: "run the build".into(),
+                text_elements: Vec::new(),
+            }])
+            .with_thread_settings(ThreadSettingsOverrides {
+                environments: Some(local_selections(test.config.cwd.clone())),
+                approval_policy: Some(approval_policy),
+                sandbox_policy: Some(sandbox_policy),
+                permission_profile,
+                collaboration_mode: Some(CollaborationMode {
+                    mode: ModeKind::Default,
+                    settings: Settings {
+                        model: session_model,
+                        reasoning_effort: None,
+                        developer_instructions: None,
+                    },
+                }),
+                ..Default::default()
             }),
-            ..Default::default()
-        })
+        )
         .await?;
 
     // No approval flow participates: the policy Allow decision short-circuits
@@ -313,25 +314,27 @@ async fn attacker_absolute_path_without_allow_rule_is_sandboxed() -> Result<()> 
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(permission_profile, test.cwd.path());
     test.codex
-        .start_or_steer_turn(TurnInputRequest::user_input(vec![UserInput::Text {
-            text: "run the build".into(),
-            text_elements: Vec::new(),
-        }]))
-        .with_thread_settings(ThreadSettingsOverrides {
-            environments: Some(local_selections(test.config.cwd.clone())),
-            approval_policy: Some(approval_policy),
-            sandbox_policy: Some(sandbox_policy),
-            permission_profile,
-            collaboration_mode: Some(CollaborationMode {
-                mode: ModeKind::Default,
-                settings: Settings {
-                    model: session_model,
-                    reasoning_effort: None,
-                    developer_instructions: None,
-                },
+        .start_or_steer_turn(
+            TurnInputRequest::user_input(vec![UserInput::Text {
+                text: "run the build".into(),
+                text_elements: Vec::new(),
+            }])
+            .with_thread_settings(ThreadSettingsOverrides {
+                environments: Some(local_selections(test.config.cwd.clone())),
+                approval_policy: Some(approval_policy),
+                sandbox_policy: Some(sandbox_policy),
+                permission_profile,
+                collaboration_mode: Some(CollaborationMode {
+                    mode: ModeKind::Default,
+                    settings: Settings {
+                        model: session_model,
+                        reasoning_effort: None,
+                        developer_instructions: None,
+                    },
+                }),
+                ..Default::default()
             }),
-            ..Default::default()
-        })
+        )
         .await?;
 
     wait_for_event(&test.codex, |event| {
