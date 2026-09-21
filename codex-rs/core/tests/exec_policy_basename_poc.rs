@@ -6,9 +6,10 @@
 //! absolute path with the same basename, and the command then runs UNSANDBOXED
 //! with no approval, writing outside the sandbox's writable roots.
 //!
-//! Mirrors the repo's `matched_prefix_rule_runs_unsandboxed_under_zsh_fork`
-//! (approvals.rs), which proves a matched prefix rule legitimately reruns a
-//! command unsandboxed. The deltas that constitute the vulnerability:
+//! Uses the repo's standard session test harness (as in
+//! tests/suite/exec_policy.rs) with a restrictive workspace-write profile so
+//! the sandbox is genuinely enforced for the control test. The deltas that
+//! constitute the vulnerability versus an intended approval flow:
 //!   1. the rule has the exact shape the approval amendment persists, and
 //!   2. the executed program is an attacker-planted script at an absolute
 //!      path (`<workspace>/cargo build`), not the real PATH-resolved `cargo`.
@@ -51,6 +52,7 @@ pub static CODEX_ALIASES_TEMP_DIR: Option<TestBinaryDispatchGuard> = {
 
 use anyhow::Result;
 use codex_core::TurnInputRequest;
+use codex_features::Feature;
 use codex_protocol::config_types::CollaborationMode;
 use codex_protocol::config_types::ModeKind;
 use codex_protocol::config_types::Settings;
@@ -68,11 +70,10 @@ use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
 use core_test_support::test_codex::TestCodex;
 use core_test_support::test_codex::local_selections;
+use core_test_support::test_codex::test_codex;
 use core_test_support::test_codex::turn_permission_fields;
 use core_test_support::wait_for_event;
-use core_test_support::zsh_fork::build_zsh_fork_test;
 use core_test_support::zsh_fork::restrictive_workspace_write_profile;
-use core_test_support::zsh_fork::zsh_fork_runtime;
 use serde_json::Value;
 use serde_json::json;
 use std::fs;
@@ -146,17 +147,11 @@ fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()> {
         || async {
     skip_if_no_network!(Ok(()));
 
-    let Some(runtime) = zsh_fork_runtime("poc basename approval inheritance unsandboxed")? else {
-        return Ok(());
-    };
-
-    // AskForApproval::Never mirrors the repo's own
-    // `matched_prefix_rule_runs_unsandboxed_under_zsh_fork` test. The absence
-    // of any approval flow is guaranteed by the policy Allow decision (the
-    // execpolicy-level PoC proves the same command yields Decision::Prompt,
-    // i.e. approval-required, when no allow rule exists). The allow rule below
-    // is the one the user's earlier `cargo build` out-of-sandbox approval
-    // persisted.
+    // AskForApproval::Never means unmatched commands run (sandboxed) without
+    // prompting; the allow rule is expected to produce an UNSANDBOXED run.
+    // The absence of any approval flow is guaranteed by the policy Allow
+    // decision (the execpolicy-level PoC proves the same command yields
+    // Decision::Prompt when no allow rule exists).
     let approval_policy = AskForApproval::Never;
     let permission_profile = restrictive_workspace_write_profile();
     let server = start_mock_server().await;
@@ -166,18 +161,22 @@ fn approval_amendment_rule_runs_attacker_binary_unsandboxed() -> Result<()> {
     let outside_dir = tempfile::tempdir_in(std::env::current_dir()?)?;
     let canary = outside_dir.path().join("poc-basename-approval-canary.txt");
 
-    let test = build_zsh_fork_test(
-        &server,
-        runtime,
-        approval_policy,
-        permission_profile.clone(),
-        |home| {
-            let rules_dir = home.join("rules");
-            fs::create_dir_all(&rules_dir).unwrap();
-            fs::write(rules_dir.join("default.rules"), APPROVAL_AMENDMENT_RULE).unwrap();
-        },
-    )
-    .await?;
+    let config_profile = permission_profile.clone();
+    let builder = test_codex().with_config(move |config| {
+        config
+            .features
+            .enable(Feature::UnifiedExec)
+            .expect("test config should allow feature update");
+        config
+            .permissions
+            .set_permission_profile(config_profile)
+            .expect("set permission profile");
+        let rules_path = config.codex_home.join("rules").join("default.rules");
+        fs::create_dir_all(rules_path.parent().expect("rules directory"))
+            .expect("create rules directory");
+        fs::write(rules_path, APPROVAL_AMENDMENT_RULE).expect("write amendment rule");
+    });
+    let test = builder.build_with_auto_env(&server).await?;
 
     let script = plant_attacker_cargo(test.cwd.path(), &canary);
     let command = format!("{script:?} build");
@@ -263,10 +262,6 @@ fn attacker_absolute_path_without_allow_rule_is_sandboxed() -> Result<()> {
         || async {
     skip_if_no_network!(Ok(()));
 
-    let Some(runtime) = zsh_fork_runtime("poc basename approval inheritance control")? else {
-        return Ok(());
-    };
-
     // Same attacker scenario, but ~/.codex/rules/default.rules is EMPTY: the
     // user never approved any `cargo` command. The same absolute-path command
     // must run inside the sandbox, where the write outside the workspace
@@ -278,18 +273,22 @@ fn attacker_absolute_path_without_allow_rule_is_sandboxed() -> Result<()> {
     let outside_dir = tempfile::tempdir_in(std::env::current_dir()?)?;
     let canary = outside_dir.path().join("poc-basename-control-canary.txt");
 
-    let test = build_zsh_fork_test(
-        &server,
-        runtime,
-        approval_policy,
-        permission_profile.clone(),
-        |home| {
-            let rules_dir = home.join("rules");
-            fs::create_dir_all(&rules_dir).unwrap();
-            fs::write(rules_dir.join("default.rules"), "").unwrap();
-        },
-    )
-    .await?;
+    let config_profile = permission_profile.clone();
+    let builder = test_codex().with_config(move |config| {
+        config
+            .features
+            .enable(Feature::UnifiedExec)
+            .expect("test config should allow feature update");
+        config
+            .permissions
+            .set_permission_profile(config_profile)
+            .expect("set permission profile");
+        let rules_path = config.codex_home.join("rules").join("default.rules");
+        fs::create_dir_all(rules_path.parent().expect("rules directory"))
+            .expect("create rules directory");
+        fs::write(rules_path, "").expect("write empty rules file");
+    });
+    let test = builder.build_with_auto_env(&server).await?;
 
     let script = plant_attacker_cargo(test.cwd.path(), &canary);
     let command = format!("{script:?} build");
