@@ -15,6 +15,12 @@ jobs:
           rustup toolchain install 1.95.0 --profile minimal
           rustup default 1.95.0
 
+      - name: Install dotslash (fetches the pinned zsh-fork used by the core test harness)
+        run: |
+          curl -sSL https://github.com/facebook/dotslash/releases/download/v0.5.9/dotslash-linux-musl.x86_64.tar.gz | tar xz
+          sudo install -m 0755 dotslash /usr/local/bin/dotslash
+          dotslash --version
+
       - name: Run policy-level PoC test (execpolicy crate)
         working-directory: codex-rs
         run: cargo test -p codex-execpolicy --test basename_approval_inheritance -- --nocapture
